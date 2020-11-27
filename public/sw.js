@@ -58,7 +58,6 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     console.log(event);
 
-
     if (event.request.url.includes('/api')) {
         return event.respondWith(
             caches
@@ -73,7 +72,6 @@ self.addEventListener('fetch', (event) => {
                             return response;
                         })
                         .catch(error => {
-
                             return cache.match(event.request)
                         })
                 })
@@ -91,4 +89,4 @@ self.addEventListener('fetch', (event) => {
             .catch(error => console.log(error))
     )
 
-})
+});

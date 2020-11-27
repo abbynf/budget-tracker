@@ -1,5 +1,10 @@
 let transactions = [];
+var newTransactions = [];
 let myChart;
+let onOrOff;
+
+console.log(window);
+console.log("INSIDE INDEX.JS FILE");
 
 fetch("/api/transaction")
   .then(response => {
@@ -66,14 +71,14 @@ function populateChart() {
 
   myChart = new Chart(ctx, {
     type: 'line',
-      data: {
-        labels,
-        datasets: [{
-            label: "Total Over Time",
-            fill: true,
-            backgroundColor: "#6666ff",
-            data
-        }]
+    data: {
+      labels,
+      datasets: [{
+        label: "Total Over Time",
+        fill: true,
+        backgroundColor: "#6666ff",
+        data
+      }]
     }
   });
 }
@@ -104,14 +109,25 @@ function sendTransaction(isAdding) {
     transaction.value *= -1;
   }
 
-  // add to beginning of current array of data
-  transactions.unshift(transaction);
+  if (onOrOff == "offline") {
+    var storeMeName = transaction.name;
+    var storeMeValue = transaction.value.toString();
+    var storeMeDate = transaction.date;
+    var storedKey = transaction.date;
+    var storedValue = storeMeName + "#" + storeMeValue + "#" + storeMeDate;
+
+    localStorage.setItem(storedKey, storedValue);
+  }
+
+
+    // add to beginning of current array of data
+    transactions.unshift(transaction);
 
   // re-run logic to populate ui with new record
   populateChart();
   populateTable();
   populateTotal();
-  
+
   // also send to server
   fetch("/api/transaction", {
     method: "POST",
@@ -121,33 +137,103 @@ function sendTransaction(isAdding) {
       "Content-Type": "application/json"
     }
   })
-  .then(response => {    
-    return response.json();
-  })
-  .then(data => {
-    if (data.errors) {
-      errorEl.textContent = "Missing Information";
-    }
-    else {
+    .then(response => {
+      return response.json();
+    })
+    .then(data => {
+      if (data.errors) {
+        errorEl.textContent = "Missing Information";
+      }
+      else {
+        // clear form
+        nameEl.value = "";
+        amountEl.value = "";
+      }
+    })
+    .catch(err => {
+      // fetch failed, so save in indexed db
+      saveRecord(transaction);
+
       // clear form
       nameEl.value = "";
       amountEl.value = "";
-    }
-  })
-  .catch(err => {
-    // fetch failed, so save in indexed db
-    saveRecord(transaction);
-
-    // clear form
-    nameEl.value = "";
-    amountEl.value = "";
-  });
+    });
 }
 
-document.querySelector("#add-btn").onclick = function() {
+document.querySelector("#add-btn").onclick = function () {
   sendTransaction(true);
 };
 
-document.querySelector("#sub-btn").onclick = function() {
+document.querySelector("#sub-btn").onclick = function () {
   sendTransaction(false);
 };
+
+async function sendSavedData(transaction) {
+  var result;
+  console.log("THIRD")
+  var response = await fetch("/api/transaction", {
+    method: "POST",
+    body: JSON.stringify(transaction),
+    headers: {
+      Accept: "application/json, text/plain, */*",
+      "Content-Type": "application/json"
+    }
+  })
+  return result = await response.json();
+}
+
+function checkOnlineStatus(event) {
+  if (event.type == "offline") {
+    console.log("You are now offline.")
+    onOrOff = "offline"
+  }
+  if (event.type == "online") {
+    console.log("You are now back online.");
+    onOrOff = "online"
+    var keysToAdd = [];
+    for (var i = 0; i< localStorage.length; i++){
+      var addKey = localStorage.key(i)
+      keysToAdd.push(addKey);
+    };
+    console.log(keysToAdd);
+    keysToAdd.sort();
+    console.log(keysToAdd);
+    for (var i = 0; i < keysToAdd.length; i++) {
+
+      var chosenKey = keysToAdd[i];
+
+      var storedValue = localStorage.getItem(chosenKey);
+  
+    
+      // console.log the iteration key and value
+      console.log('FIRST Key: ' + chosenKey + ', Value: ' + storedValue);  
+
+      var transactionArray = storedValue.split("#");
+      var transactionObject = {
+        name: transactionArray[0],
+        value: transactionArray[1],
+        date: transactionArray[2]
+      };
+
+      console.log("SECOND", transactionObject);
+      localStorage.removeItem(chosenKey);
+
+      // Send data to database
+      sendSavedData(transactionObject)
+      .then(result =>  {
+        console.log(result);
+        console.log("SENT")
+      })
+    }
+
+
+  }
+}
+
+window.addEventListener('online', checkOnlineStatus);
+window.addEventListener('offline', checkOnlineStatus);
+
+
+
+
+// Add event Listener so on load, it checks for any data in the local storage that didn't get pushed to the database yet
